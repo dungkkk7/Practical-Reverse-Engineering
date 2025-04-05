@@ -795,3 +795,774 @@ char* fill_string(char* str, char fill_char) {
 **Lưu ý**: Code này chỉ điền `len` byte (không tính `NUL`), nên kết quả phụ thuộc độ dài tính được.
 
 ---
+
+## Arithmetic Operations 
+
+Các toán tử số học cơ bản như cộng , trừ , nhân , chia và các phép dịch bit , AND OR XOR NOT cũng được hỗ trợ với các lệnh tương ứng. Ngoại trừ nhân và chia thì cũng phép toán còn lại dễ sử dung. 
+
+### Ví dụ 
+
+
+```asm 
+    add esp , 14h ; cộng esp thêm 0x14 và lưu vào esp 
+    sub ecx , eax ; ecx = ecx - eax 
+    sub esp , 0ch ; esp = esp - 0xC
+    inc ecx       ; tăng ecx thêm 1 
+    dec edi       ; giảm edi 1 
+    or  eax , 0FFFFFFFF ; phép or giữa eax và 0XFFFFFFFF
+    and ecx , 7  ; phep and 
+    xor eax , eax ; phép xor
+    not edi       ; edi = ~edi 
+    shl cl , 4    ; cd = cl << 4 
+    shr ecx ,1    ; ecx = ecx >> 1 ;
+    rol al , 3    ; xoay tròn al sang trái 3 bit 
+    ror al , 1    ; xoay tròn sang phỉa 1 bit 
+
+
+
+``` 
+Các lênh shl hay shr thường tháy trong các mã nguồn thực tế vì nó được dùng đẻ tối uư các phep toán nhân chia , khi các số nhân và chia là các số mũ của 2. loại tối ưu này thường được gòi là *Streng reduction*  vì nó thay thế một phép toán tốn kém tính toán bằng một phép toán nhanh hơn.
+
+Các phép phân k đấu và có dấu được thưc hiên  thông qua các lệnh *MUL* và  *IMUL* tương ứng. 
+
+__MUL__ 
+Lệnh MUL được sử dụng để thực hiện phép nhân không dấu (unsigned multiplication).
+format :  *MUL reg/memory*
+
+Tức là phép nhân này chỉ có thể thực hiện trên giá trị trong thanh ghi hoặc bộ nhớ.
+Lệnh MUL nhân giá trị trong thanh ghi với giá trị trong AL, AX, hoặc EAX và lưu kết quả vào các thanh ghi AX, DX:AX, hoặc EDX:EAX, tùy vào độ rộng của toán hạng. 
+
+### Dưới đây là các ví dụ:
+    ```asm 
+    mul ecx   ; đây là phép nhân giưuax eax và ecx kết quả sẽ được lưu vào EDX:EAX
+              ; tức nếu phép toán vượt quá 32 bit eax phần cao sẽ được lưu vào EDX , và phần thấp sẽ lưu và EAX. 
+    mul dword ptr [esi + 4] ; tương tự trên EDX:EAX = EAX * 4 byte tại đia chỉ [esp +4]
+
+    mul dx   ; DX:AX = AX*DX ; dx và cl đều 16 bit nên dùng các thanh ghi 16 bit để trữ tính toán. 
+    mul cl   ; AX = AL * CL 
+
+    ```       
+
+
+
+__IMUL__ 
+
+Lệnh **IMUL** được sử dụng để thực hiện phép nhân có dấu (signed multiplication). **IMUL** có ba dạng cơ bản:
+
+1. **IMUL reg/mem**: Tương tự như lệnh `MUL`, phép nhân này thực hiện giữa giá trị trong thanh ghi `EAX` và giá trị trong thanh ghi hoặc bộ nhớ. Kết quả được lưu vào `EDX:EAX`.
+   - Ví dụ: `F7 E9` → `imul ecx` → `EDX:EAX = EAX * ECX`
+
+2. **IMUL reg1, reg2/mem**: Phép nhân giữa `reg1` và `reg2/mem`. Kết quả sẽ được lưu vào `reg1`.
+   - Ví dụ: `69 F6 A0 01 00+` → `imul esi, 1A0h` → `ESI = ESI * 0x1A0`
+
+3. **IMUL reg1, reg2/mem, imm**: Phép nhân giữa `reg2/mem` và một giá trị ngay lập tức (immediate value). Kết quả được lưu vào `reg1`.
+   - Ví dụ: `0F AF CE` → `imul ecx, esi` → `ECX = ECX * ESI`
+
+Trong Assembly, phép chia có dấu và không dấu được thực hiện thông qua các lệnh DIV và IDIV. Dưới đây là cách giải thích chi tiết về các lệnh này và cách chúng hoạt động.
+
+
+__DIV__
+DIV được sử dụng để thực hiện phép chia không dấu (unsigned division). Khi thực hiện phép chia không dấu, các toán hạng được coi là các số không âm (unsigned), tức là không có dấu và mọi phép chia diễn ra trên các số không dấu.
+
+format : `DIV reg/mem`  . 
+
+### ví dụ : 
+
+```asm 
+     div ecx      ; Chia EDX:EAX cho ECX, kết quả (quotient) lưu vào EAX, phần dư (remainder) lưu vào EDX.
+     div cl       ; Chia AX cho CL, kết quả (quotient) lưu vào AL, phần dư (remainder) lưu vào AH.
+     div dword ptr [esi+24h]  ; Chia EDX:EAX cho giá trị tại [ESI+24], kết quả lưu vào EAX và phần dư vào EDX.
+```
+
+
+__IDIV__
+
+IDIV được sử dụng để thực hiện phép chia có dấu (signed division), tức là phép chia giữa các số có dấu (cả số âm và dương).
+
+format : `IDIV reg/mem`  .
+
+```asm 
+    ; Giả sử EAX chứa -100 (0xFFFFFF9C), và ECX chứa 3
+    mov eax, 0FFFFFF9Ch   ; EAX = -100 (số bị chia)
+    mov ecx, 3            ; ECX = 3 (mẫu số)
+
+    ; IDIV thực hiện phép chia EDX:EAX cho ECX
+    idiv ecx              ; Chia EDX:EAX cho ECX
+
+    ; Kết quả:
+    ; EAX (quotient) = -33 (0xFFFFFFD7)
+    ; EDX (remainder) = 1 (0x01)
+
+
+
+```
+
+
+# Stack Operations and Function Invocation
+Ngăn xếp (stack) là một cấu trúc dữ liệu cơ bản trong lập trình và hệ điều hành. Nó được sử dụng để quản lý dữ liệu theo cách "vào sau, ra trước" (Last-In, First-Out - LIFO). Nghĩa là, phần tử nào được thêm vào cuối cùng sẽ được lấy ra đầu tiên.
+
+Ví dụ thực tế: Trong ngôn ngữ C, các biến cục bộ (local variables) của một hàm được lưu trữ trong không gian ngăn xếp của hàm đó. Khi hệ điều hành chuyển từ chế độ người dùng (ring 3) sang chế độ hạt nhân (ring 0), nó cũng lưu thông tin trạng thái (state information) lên ngăn xếp.
+
+Ngăn xếp hỗ trợ hai thao tác chính:
+
+Push: Đặt một phần tử lên đỉnh ngăn xếp.
+Pop: Lấy phần tử ở đỉnh ngăn xếp ra. 
+
+#### Ngăn xếp trong kiến trúc x86
+Trong kiến trúc x86 (một loại kiến trúc bộ xử lý), ngăn xếp là một vùng bộ nhớ liền kề được quản lý bởi thanh ghi ESP (Stack Pointer - Con trỏ ngăn xếp).
+Ngăn xếp trong x86 phát triển ngược xuống dưới (grows downwards), nghĩa là khi thêm dữ liệu, địa chỉ bộ nhớ giảm dần.
+Các lệnh PUSH và POP được sử dụng để thực hiện thao tác push/pop, và chúng tự động thay đổi giá trị của ESP:
+PUSH: Giảm ESP trước, rồi ghi dữ liệu vào vị trí mà ESP trỏ tới.
+POP: Đọc dữ liệu từ vị trí ESP trỏ tới, rồi tăng ESP lên.
+
+
+
+##### Chi tiết kỹ thuật
+Giá trị mặc định mà ESP tăng/giảm sau mỗi lệnh PUSH hoặc POP là 4 byte (vì hệ điều hành thường yêu cầu ngăn xếp được căn chỉnh theo double-word, tức là 4 byte).
+Tuy nhiên, giá trị này có thể được thay đổi thành 1 hoặc 2 byte bằng cách sử dụng tiền tố (prefix override), nhưng trong thực tế, hầu như luôn là 4 byte để đảm bảo căn chỉnh.
+
+```asm 
+    mov eax, 0xAAAAAAAA ; Gán giá trị 0xAAAAAAAA vào thanh ghi eax.
+    mov ebx, 0xBBBBBBBB;
+    mov ecx, 0xCCCCCCCC 
+    mov edx, 0xDDDDDDDD
+    push eax            ; Đẩy giá trị của eax (0xAAAAAAAA) lên ngăn xếp.
+                        ; ESP giảm 4 byte: 0xb20000 - 4 = 0xb1fffc.
+                        ; Giá trị 0xAAAAAAAA được ghi vào địa chỉ 0xb1fffc.
+                        ; ESP bây giờ là 0xb1fffc, và ngăn xếp chứa 0xAAAAAAAA tại 0xb1fffc.
+    push ebx            ; Đẩy giá trị của ebx (0xBBBBBBBB) lên ngăn xếp.
+                        ; ESP giảm 4 byte: 0xb1fffc - 4 = 0xb1fff8.
+                        ;Giá trị 0xBBBBBBBB được ghi vào địa chỉ 0xb1fff8.
+    pop esi             ; Lấy giá trị ở đỉnh ngăn xếp (tại 0xb1fff8) ra và gán vào thanh ghi esi.  
+                        ; Đọc giá trị 0xBBBBBBBB từ 0xb1fff8.
+                        ; ESP tăng 4 byte: 0xb1fff8 + 4 = 0xb1fffc.
+```
+![alt text](image-2.png)
+
+
+Thanh ghi ESP (Stack Pointer) không chỉ bị thay đổi bởi các lệnh PUSH và POP, mà còn có thể được điều chỉnh trực tiếp bởi các lệnh khác như ADD (cộng) và SUB (trừ). Điều này cho phép linh hoạt trong việc quản lý ngăn xếp.
+
+
+##### Hàm trong ngôn ngữ cấp cao và mức máy
+Trong các ngôn ngữ lập trình cấp cao (như C), khái niệm "hàm" (function) bao gồm việc gọi hàm và trả về kết quả là một abstraction (trừu tượng hóa). Tuy nhiên, ở mức bộ xử lý (processor), không có khái niệm hàm như vậy.
+Bộ xử lý chỉ làm việc với các đối tượng cụ thể như thanh ghi (registers) hoặc dữ liệu trong bộ nhớ (memory). Vậy làm thế nào để thực hiện các hàm ở mức máy? Câu trả lời là: sử dụng ngăn xếp (stack).
+
+Khi một hàm được gọi, ngăn xếp được sử dụng để:
+Lưu trữ các tham số (arguments) của hàm.
+Lưu trữ địa chỉ trả về (return address).
+Quản lý các biến cục bộ và trạng thái của hàm.
+Các lệnh assembly như CALL, RETN, cùng với việc thao tác trên ngăn xếp, giúp thực hiện việc này.
+
+__Hàm trong C__
+```c
+
+    int __cdecl addme(short a, short b)
+    {
+        return a + b;
+    }
+```
+Đây là một hàm đơn giản nhận hai tham số kiểu short (2 byte mỗi tham số) và trả về tổng của chúng.
+__cdecl là quy ước gọi hàm (calling convention), trong đó:
+Tham số được đẩy lên ngăn xếp từ phải sang trái (b trước, rồi a).
+Người gọi hàm (caller) chịu trách nhiệm dọn dẹp ngăn xếp sau khi hàm hoàn tất.
+
+
+Mã Assembly của hàm addme:
+
+```asm
+    01: 004113A0 55           push   ebp  ; Đẩy giá trị của thanh ghi ebp (Base Pointer) lên ngăn xếp để lưu trạng thái của nó. ebp thường được dùng để tham chiếu các tham số và biến cục bộ trong hàm.
+    02: 004113A1 8B EC        mov    ebp, esp  ; Gán giá trị của esp (Stack Pointer) vào ebp. Điều này thiết lập một "frame pointer" mới cho hàm, giúp truy cập các tham số trên ngăn xếp một cách dễ dàng.
+    03: ...
+    04: 004113BE 0F BF 45 08  movsx  eax, word ptr [ebp+8]  ; Lấy giá trị của tham số a từ ngăn xếp (tại vị trí ebp + 8) và gán vào eax.
+                                                            ; movsx (move with sign-extension) chuyển đổi giá trị 2 byte (short) thành 4 byte (dấu được mở rộng để phù hợp với thanh ghi 32-bit).
+    05: 004113C2 0F BF 4D 0C  movsx  ecx, word ptr [ebp+0Ch] ; Lấy giá trị của tham số b từ ngăn xếp (tại vị trí ebp + 0xC, tức là ebp + 12) và gán vào ecx. Tương tự, giá trị 2 byte được mở rộng thành 4 byte.
+    06: 004113C6 03 C1        add   eax, ecx ; cộng giá trị trong ecx (b) vào eax (a). Kết quả tổng được lưu trong eax, đây cũng là giá trị trả về của hàm (theo quy ước __cdecl).
+    07: ...
+    08: 004113CB 8B E5        mov    esp, ebp ; Khôi phục giá trị của esp về vị trí ban đầu (bằng cách sao chép từ ebp). Điều này dọn dẹp bất kỳ biến cục bộ nào trên ngăn xếp (trong trường hợp này không có).
+    09: 004113CD 5D           pop    ebp  ; Lấy giá trị ebp cũ từ ngăn xếp và khôi phục nó, đưa chương trình về trạng thái trước khi gọi hàm.
+    10: 004113CE C3           retn      ; Lệnh "return" . Nó lấy địa chỉ trả về từ đỉnh ngăn xếp (được đẩy bởi lệnh CALL) và nhảy về đó.
+
+```
+
+
+Lệnh CALL:
+Đây là lệnh dùng để gọi một hàm hoặc nhảy đến một địa chỉ cụ thể trong mã máy. Khi được thực thi, nó thực hiện hai thao tác:
+Đẩy địa chỉ trả về lên ngăn xếp: Địa chỉ trả về là địa chỉ của lệnh ngay sau lệnh CALL (trong ví dụ là 004129FE). Điều này đảm bảo chương trình biết nơi để quay lại sau khi hàm hoàn tất.
+Thay đổi thanh ghi EIP: Thanh ghi EIP (Instruction Pointer) được cập nhật để trỏ đến địa chỉ của hàm được gọi (trong ví dụ là addme tại 004113A0). Điều này chuyển quyền điều khiển sang hàm đích.
+Lệnh RET (Return):
+Lệnh này kết thúc hàm và trả quyền điều khiển về nơi gọi hàm. Nó thực hiện một thao tác:
+Lấy địa chỉ ở đỉnh ngăn xếp (được đẩy bởi CALL) và gán vào EIP, sau đó nhảy đến địa chỉ đó.
+Về mặt khái niệm, RET giống như một lệnh "POP EIP", nhưng không có chuỗi lệnh như vậy trong x86, vì EIP không thể được thao tác trực tiếp như các thanh ghi khác.
+
+##### Ví dụ minh họa:
+
+```asm 
+01: 68 78 56 34 12   push  0x12345678
+02: C3               ret
+```
+
+Dòng 1: Đẩy địa chỉ 0x12345678 lên ngăn xếp.
+Dòng 2: RET lấy địa chỉ này từ đỉnh ngăn xếp và gán vào EIP, khiến chương trình nhảy đến 0x12345678 để tiếp tục thực thi. Đây là một cách "thủ công" để điều khiển luồng chương trình.
+
+
+Tôi sẽ định dạng lại giải thích của đoạn văn trước, tách riêng phần mã (code) và phần giải thích (explanation) để rõ ràng hơn. Dưới đây là phiên bản được tổ chức lại:
+
+---
+
+### Phần 1: Lệnh CALL và RET
+
+#### Code:
+```
+; Ví dụ minh họa nhảy đến địa chỉ 0x12345678
+01: 68 78 56 34 12   push  0x12345678
+02: C3               ret
+```
+
+#### Giải thích:
+- **Lệnh `CALL`**:
+  - Thực hiện hai thao tác:
+    1. Đẩy địa chỉ trả về (địa chỉ của lệnh ngay sau `CALL`) lên ngăn xếp.
+    2. Thay đổi thanh ghi `EIP` (Instruction Pointer) thành địa chỉ của hàm được gọi, chuyển điều khiển đến đó.
+- **Lệnh `RET`**:
+  - Lấy địa chỉ từ đỉnh ngăn xếp (do `CALL` đẩy lên) và gán vào `EIP`, rồi nhảy về địa chỉ đó.
+  - Không có lệnh “POP EIP” trực tiếp trong x86, nên `RET` thay thế cho việc này.
+- **Ví dụ trên**:
+  - `push 0x12345678`: Đẩy địa chỉ `0x12345678` lên ngăn xếp.
+  - `ret`: Lấy địa chỉ này từ ngăn xếp, gán vào `EIP`, và nhảy đến `0x12345678`.
+
+---
+
+### Phần 2: Quy ước gọi hàm (Calling Convention)
+
+#### Giải thích:
+- **Định nghĩa**: Quy ước gọi hàm là tập hợp quy tắc xác định cách hàm được gọi và xử lý ở mức máy, được quy định bởi **Application Binary Interface (ABI)** của hệ thống.
+- **Các yếu tố quy định**:
+  - Tham số được truyền qua ngăn xếp, thanh ghi, hay cả hai?
+  - Thứ tự truyền tham số: từ trái sang phải hay từ phải sang trái?
+  - Giá trị trả về được lưu ở đâu: ngăn xếp, thanh ghi, hay cả hai?
+- **Các quy ước phổ biến**:
+  - **`CDECL`**: Tham số đẩy lên ngăn xếp từ phải sang trái, caller dọn dẹp ngăn xếp.
+  - **`STDCALL`**: Tương tự CDECL, nhưng callee dọn dẹp ngăn xếp.
+  - **`THISCALL`**: Dùng trong C++, tham số `this` thường truyền qua thanh ghi.
+  - **`FASTCALL`**: Một số tham số truyền qua thanh ghi để tăng tốc.
+- **Tùy chỉnh**: Trình biên dịch có thể tạo quy ước riêng.
+
+---
+![alt text](image-3.png)
+
+
+### Exercises
+
+1.Given what you learned about CALL and RET, explain how you wouldread the value of EIP? Why can't you just do MOV EAX, EIP?
+EIP là gì?:
+
+EIP (Instruction Pointer) là thanh ghi trong kiến trúc x86, chứa địa chỉ của lệnh tiếp theo sẽ được thực thi. Nó được cập nhật tự động sau mỗi lệnh.
+
+Tại sao không thể dùng MOV EAX, EIP?:
+
+Trong x86, EIP không phải là thanh ghi có thể truy cập trực tiếp bằng lệnh MOV. Nó được thiết kế để chỉ điều khiển luồng thực thi, không cho phép đọc hoặc ghi trực tiếp từ các lệnh thông thường.
+
+
+Lý do: Nếu có thể ghi trực tiếp vào EIP, chương trình có thể dễ dàng bị lỗi hoặc bị tấn công (ví dụ: thay đổi luồng thực thi một cách không kiểm soát). Thay vào đó, x86 cung cấp các lệnh gián tiếp như CALL, RET, JMP để thay đổi EIP.
+
+Cách đọc giá trị của EIP:
+
+Để đọc EIP, ta phải sử dụng lệnh CALL để đẩy giá trị của nó lên ngăn xếp, sau đó lấy ra từ đó. 
+Ví dụ:
+Gọi một nhãn (label) ngay sau lệnh CALL, rồi lấy địa chỉ trả về từ ngăn xếp.
+
+
+```asm 
+    ; Giả sử đây là cách đọc EIP
+    01: CALL get_eip
+    02: get_eip:
+    03: POP EAX    ; EAX chứa giá trị của EIP tại dòng 02
+
+; Dòng 01: CALL get_eip đẩy địa chỉ của lệnh tiếp theo (dòng 02) lên ngăn xếp và nhảy đến nhãn get_eip.
+; Dòng 03: POP EAX lấy địa chỉ trả về (giá trị của EIP tại dòng 02) từ đỉnh ngăn xếp và lưu vào EAX.
+``` 
+- 
+2.Come  up  with  at  least  two  code  sequences  to  set  EIP  to 0xAABBCCDD.
+
+Vì không thể ghi trực tiếp vào EIP bằng MOV, ta phải dùng các lệnh điều khiển luồng như JMP, CALL, hoặc RET. Dưới đây là hai cách:
+
+Cách 1: Sử dụng JMP
+
+
+```asm
+    jmp 0xAABBCCDD
+```
+
+Cách hoạt động: Lệnh JMP đặt EIP thành 0xAABBCCDD, khiến CPU nhảy đến địa chỉ đó và thực thi lệnh tiếp theo tại đó.
+Yêu cầu: Địa chỉ 0xAABBCCDD phải hợp lệ và chứa mã có thể thực thi.
+
+Cách 2: Sử dụng PUSH và RET
+```asm
+    push 0xAABBCCDD
+    ret
+```
+Cách hoạt động:
+
+PUSH 0xAABBCCDD đặt giá trị 0xAABBCCDD lên đỉnh ngăn xếp.
+RET lấy giá trị này từ ngăn xếp và gán vào EIP, khiến chương trình nhảy đến 0xAABBCCDD
+
+3.In the example function, addme, what would happen if the stack pointer
+were not properly restored before executing RET?
+
+Trong một hàm assembly, con trỏ ngăn xếp (ESP) thường được điều chỉnh để cấp phát không gian cho biến cục bộ, và cần được khôi phục trước khi trả về. Ví dụ về hàm điển hình:
+```asm
+addme:
+    push ebp
+    mov ebp, esp    ; Lưu frame ngăn xếp
+    sub esp, 8      ; Cấp phát 8 byte cho biến cục bộ
+    ; Thân hàm...
+    mov esp, ebp    ; Khôi phục ESP
+    pop ebp
+    ret 
+```
+Vai trò của MOV ESP, EBP: Khôi phục ESP về vị trí ban đầu, nơi chứa địa chỉ trả về (được đẩy bởi lệnh CALL gọi hàm).
+
+Nếu không khôi phục ESP:
+ESP sẽ trỏ đến vị trí sai (ví dụ, vùng biến cục bộ).
+Khi RET thực thi, nó lấy giá trị tại ESP hiện tại (có thể là dữ liệu rác hoặc biến cục bộ) và gán vào EIP.
+
+Hậu quả:
+
+Chương trình nhảy đến địa chỉ không đúng, có thể gây lỗi phân đoạn (segfault) hoặc hành vi không xác định.
+
+4.In all of the calling conventions explained, the return value is stored in a 32-bit register (EAX). What happens when the return value does not fit
+in a 32-bit register? Write a program to experiment and evaluate your
+answer. Does the mechanism change from compiler to compiler?
+
+Trong các quy ước gọi hàm x86 (như __cdecl, __stdcall), giá trị trả về thường được lưu trong EAX (32-bit). Nhưng nếu giá trị lớn hơn 32-bit (ví dụ: 64-bit hoặc cấu trúc lớn), cách xử lý phụ thuộc vào trình biên dịch. 
+
+Trong lập trình assembly x86, các quy ước gọi hàm phổ biến như __cdecl hoặc __stdcall quy định rằng:
+
+Giá trị trả về của các kiểu dữ liệu nhỏ (như int, char, hoặc con trỏ) được lưu trong thanh ghi EAX.
+Vì EAX là thanh ghi 32-bit, nó chỉ có thể chứa tối đa 32 bit dữ liệu.
+
+Ví dụ: Nếu một hàm trả về số nguyên int (32-bit), giá trị đó sẽ được đặt trong EAX sau khi hàm hoàn tất.
+
+Khi giá trị trả về lớn hơn 32-bit
+Khi hàm trả về một giá trị lớn hơn 32-bit, như:
+
+Số nguyên 64-bit (long long trong C).
+
+Cấu trúc (struct) có kích thước lớn hơn 32-bit.
+
+Thanh ghi EAX không đủ dung lượng để chứa toàn bộ giá trị. Do đó, các cơ chế khác được sử dụng. Dưới đây là hai trường hợp chính:
+
+a. Số nguyên 64-bit
+
+Trong x86, giá trị 64-bit thường được chia thành hai phần:
+32-bit thấp: Lưu trong EAX.
+
+32-bit cao: Lưu trong EDX.
+
+Đây là cách phổ biến để xử lý các kiểu dữ liệu như long long hoặc int64_t.
+
+#### Ví dụ minh họa:
+Nếu hàm trả về số 0x123456789ABCDEF0 (64-bit):
+
+EAX chứa 0x9ABCDEF0 (phần thấp).
+
+EDX chứa 0x12345678 (phần cao).
+
+b. Cấu trúc hoặc dữ liệu lớn hơn 32-bit
+
+Đối với các kiểu dữ liệu phức tạp như struct có kích thước lớn hơn 32-bit, cách xử lý phổ biến là:
+
+Người gọi (caller) cấp phát một vùng nhớ tạm thời trên ngăn xếp để lưu trữ giá trị trả về.
+
+Một con trỏ ẩn trỏ đến vùng nhớ này được truyền vào hàm như một tham số bổ sung.
+
+Hàm được gọi (callee) ghi giá trị trả về vào vùng nhớ được trỏ bởi con trỏ ẩn.
+
+Sau khi hàm hoàn tất, người gọi truy cập giá trị từ vùng nhớ đó.
+
+#### Ví dụ minh họa:
+Nếu hàm trả về một cấu trúc 8 byte (64-bit), trình biên dịch sẽ:
+
+Cấp phát 8 byte trên ngăn xếp trong hàm gọi.
+Truyền địa chỉ của vùng nhớ này cho hàm được gọi.
+Hàm được gọi ghi dữ liệu trực tiếp vào vùng nhớ đó.
+
+```c 
+    #include <stdio.h>
+
+    struct Large {
+        int a;  // 4 byte
+        int b;  // 4 byte
+    };          // Tổng: 8 byte (64-bit)
+
+    struct Large func() {
+        struct Large result = {1, 2};
+        return result;
+    }
+
+    int main() {
+        struct Large val = func();
+        printf("a = %d, b = %d\n", val.a, val.b);
+        return 0;
+    }
+```
+Giải thích chương trình:
+
+struct Large có kích thước 8 byte (64-bit), vượt quá 32-bit của EAX.
+
+Khi gọi func():
+
+Trình biên dịch cấp phát 8 byte trên ngăn xếp trong main() để lưu val.
+
+Một con trỏ ẩn đến vùng nhớ này được truyền vào func().
+
+Trong func(), giá trị {1, 2} được ghi vào vùng nhớ được trỏ bởi con trỏ ẩn.
+Sau khi func() trả về, main() truy cập val và in ra a = 1, b = 2.
+
+Assembly tương ứng (giản lược):
+
+```
+    func:
+        ; Giả sử con trỏ ẩn được truyền qua ECX
+        mov [ecx], 1        ; Ghi a = 1
+        mov [ecx + 4], 2    ; Ghi b = 2
+        ret
+```
+Giá trị trả về không được lưu trong EAX mà được ghi trực tiếp vào bộ nhớ.
+
+#### Sự khác biệt giữa các trình biên dịch
+Cơ chế xử lý giá trị trả về lớn hơn 32-bit có thể thay đổi tùy thuộc vào trình biên dịch và hệ điều hành:
+
+GCC (Linux, 32-bit):
+
+Số nguyên 64-bit: Dùng EAX (phần thấp) và EDX (phần cao).
+
+Cấu trúc lớn: Dùng con trỏ ẩn để ghi vào bộ nhớ.
+
+MSVC (Windows, 32-bit):
+
+Số nguyên 64-bit: 
+Thường dùng EAX:EDX tương tự GCC.
+
+Cấu trúc: Luôn dùng con trỏ ẩn, ngay cả với cấu trúc nhỏ nếu không tối ưu hóa.
+
+Khác biệt: Một số trình biên dịch có thể tối ưu hóa bằng cách trả về cấu trúc nhỏ trong EAX nếu vừa, nhưng với cấu trúc lớn hoặc số 64-bit, cách dùng EAX:EDX hoặc con trỏ ẩn là phổ biến. Điều này phụ thuộc vào quy ước gọi hàm và thiết kế của trình biên dịch.
+
+
+
+
+
+# Control Flow
+Phần này mô tả về cách thực hiện các kiểu thực thi có điều kiện như các cấu trúc bậc cao như * if/else ,  swicht/case  hay while/for * những cái này đều được thực hiện thông qua các lệnh *CMP , TEST , JMP và JCC*
+và kết hợp với *EFLAGS* register. 
+
+Một số các EFLAG phổ biến : 
+
+- ZF/ Zero flag : đặt thành 1 nếu kết quả của phép toán trước đó bằng 0 
+- SF/ Sign flag : Được đặt bằng giá trị của bit cao nhất (most significant bit - MSB) của kết quả. Trong số học có dấu (signed), bit này biểu thị dấu: 0 là dương, 1 là âm.
+- CF / Carry Flag : Được đặt khi kết quả của phép toán vượt quá phạm vi của số không dấu (unsigned). Nó biểu thị có "carry" (tràn số) từ bit cao nhất
+- OF / Overflow Flag : Được đặt nếu kết quả của phép toán vượt quá kích thước tối đa của số có dấu (signed), gây tràn số.
+
+Các lệnh số học (như ADD, SUB, CMP, v.v.) tự động cập nhật các cờ trong EFLAGS dựa trên kết quả của phép toán.
+
+Lệnh SUB EAX, EAX:
+
+Thực hiện: EAX - EAX = 0.
+
+Kết quả là 0, nên:
+
+ZF = 1 (vì kết quả bằng 0).
+
+SF = 0 (vì MSB của 0 là 0, không âm).
+
+CF = 0 (không có tràn không dấu).
+
+OF = 0 (không có tràn có dấu).
+
+## Lệnh Jcc (Jump if Condition Code)
+
+Format : J + mã điều kiện 
+
+Ý nghĩa: Đây là nhóm lệnh nhảy có điều kiện (conditional jump) trong x86, ví dụ: JZ (Jump if Zero), JS (Jump if Sign), JC (Jump if Carry), JO (Jump if Overflow).
+
+Cách hoạt động: Chúng kiểm tra trạng thái của các cờ trong EFLAGS và quyết định có nhảy đến một địa chỉ khác hay không.
+
+##### ví dụ 
+
+```asm 
+    mov eax, 5
+    sub eax, eax  ; EAX = 5 - 5 = 0
+    jz zero       ; Nhảy nếu ZF = 1
+    ; Không nhảy qua đây nếu ZF = 0
+    zero:
+    ; Thực thi khi kết quả là 0
+
+    ; ví dụ khác 
+    mov eax, 0x7FFFFFFF  ; Giá trị lớn nhất của signed 32-bit (2147483647)
+    add eax, 1           ; EAX = 0x7FFFFFFF + 1
+    jo overflow          ; Nhảy nếu OF = 1
+    ; Không nhảy qua đây nếu không tràn
+    overflow:
+    ; Thực thi khi có tràn số
+```
+
+Có tới 16 mã đièu kiênj nhưng đây là những cái phổ biến nhất. 
+
+![alt text](image-4.png)
+
+Trong các ngôn ngữ lập trình cấp cao như C, bạn có thể khai báo kiểu dữ liệu rõ ràng (ví dụ: int cho số có dấu, unsigned int cho số không dấu). Tuy nhiên, trong assembly, không có khái niệm kiểu dữ liệu cố định; mọi thứ chỉ là các bit trong thanh ghi hoặc bộ nhớ.
+Để phân biệt cách diễn giải các số (có dấu hay không dấu), assembly dựa vào các cờ trong thanh ghi EFLAGS (như ZF, SF, CF, OF) và các lệnh nhảy có điều kiện (Jcc) tương ứng.
+
+Ví dụ:
+
+Với số không dấu: Dùng CF (Carry Flag) để kiểm tra tràn.
+
+Với số có dấu: Dùng OF (Overflow Flag) để kiểm tra tràn. 
+
+
+## IF/ELSE
+
+if else là 1 cấu trúc khá đơn giản để nhận biết vi chúng liên quan tới so sánh và test sử dụng bởi JCC. 
+
+ví dụ :
+
+__ASM__
+
+```nasm 
+     mov  esi , [ebp + 8]
+     mov  edx , [esi]
+     test edx , edx 
+     jz   short loc_4E3F9
+     mov  ecx , offset _FsRtlFastMutexLookasideList
+     call  _ExFreeToNPagedLookasideList@8
+     and   dword ptr [esi], 0 
+     lea   eax, [esi+4]
+     push  eax 
+     call  _FsRtlUninitializeBaseMcb@4
+   loc_4E31F9:
+     pop   esi
+     pop   ebp
+     retn  4 
+     _FsRtlUninitializeLargeMcb@4 end
+
+     
+```
+
+__Pseudo C__
+
+```c
+    if (*esi == 0) {
+    return;
+    }
+    ExFreeToNPagedLookasideList(...);
+    *esi = 0;
+    ...
+    return;
+
+    OR
+
+    if (*esi != 0) {
+    ...
+    ExFreeToNPagedLookasideList(...);
+    *esi = 0;
+    ...
+    }
+    return
+
+```
+Dòng 03: test edx, edx
+
+Giải thích: Thực hiện phép AND logic giữa EDX và chính nó. Kết quả không được lưu, nhưng các cờ trong EFLAGS được cập nhật.
+
+Cờ ảnh hưởng:
+
+Nếu EDX = 0, phép AND cho kết quả 0, nên ZF = 1 (Zero Flag được đặt).
+
+Nếu EDX ≠ 0, ZF = 0.
+
+Ý nghĩa: Đây là cách phổ biến để kiểm tra xem một thanh ghi có bằng 0 hay không.
+
+Dòng 04: jz short loc_4E31F9
+
+Giải thích: Nhảy đến nhãn loc_4E31F9 (dòng 11) nếu ZF = 1 (tức EDX = 0).
+
+Ý nghĩa: Nếu *esi == 0, chương trình bỏ qua phần thân của "if" và nhảy thẳng đến phần trả về.
+
+
+
+## Switch-Case
+
+Switch-Case cũng là 1 khối mã đièu kiện tuần tự của if/else. 
+
+#### Ví du : 
+
+
+```c 
+    //Switch-Case
+    switch(ch) {
+        case 'c':
+            handle_C();
+            break;
+        case 'h':
+            handle_H();
+            break;
+        default:
+            break;
+    }
+    domore();
+    
+    ...
+    // If-Else
+    if (ch == 'c') {
+        handle_C();
+    } else
+    if (ch == 'h') {
+        handle_H();
+    }
+    domore();
+```
+
+__ASM__
+
+
+```asm 
+    ; hàm unsigned char switchme(int a)
+    push ebp; 
+    mov  ebp , esp 
+    mov  eax , [ebp + 8]
+    sub  eax, 41h
+    je  short loc_caseA 
+    dec  eax; 
+    je  short loc_caseB 
+    dec  eax; 
+    je   short loc_caseC
+    mov al. 5ah 
+    movzx eax, al 
+    pop  ebp; 
+    retn 
+   loc_caseC:
+    mov al, 43h; 
+    movzx eax, al 
+    pop  ebp; 
+    retn 
+
+   loc_caseB : 
+    mov al, 42h; 
+    movzx eax, al 
+    pop  ebp; 
+    retn 
+
+
+   loc_caseA :
+    mov al, 41h;   
+    movzx eax, al    
+    pop ebp
+    retn
+
+```
+
+
+__C__
+```c
+    unsigned char switchme(int a)
+    {
+        unsigned char res;
+        switch(a) {
+        case 0x41:
+            res = 'A';
+            break;
+        case 0x42:
+            res = 'B';
+            break;
+        case 0x43:
+            res = 'C';
+            break;
+        default:
+            res = 'Z';
+            break;
+        }
+        return res;
+    }
+```
+
+Trong ngôn ngữ lập trình cấp cao như C, câu lệnh switch-case cho phép chương trình chọn một nhánh thực thi dựa trên giá trị của một biến. Nếu triển khai đơn giản (như dùng nhiều if-else), chương trình sẽ phải thực hiện nhiều phép so sánh (CMP) và nhảy có điều kiện (Jcc), dẫn đến hiệu suất thấp khi số lượng trường hợp (case) lớn.
+Để tối ưu, trình biên dịch thường tạo ra một jump table (bảng nhảy) thay vì kiểm tra từng trường hợp. Điều này giúp giảm số lần so sánh và nhảy, tăng tốc độ thực thi.
+
+Jump table: Là một cấu trúc dữ liệu dạng mảng, trong đó mỗi phần tử là một địa chỉ bộ nhớ (pointer) trỏ đến đoạn mã xử lý cho một trường hợp (case) trong switch.
+Khi chương trình chạy, thay vì so sánh giá trị của biến switch với từng trường hợp, nó chỉ cần tính toán chỉ số (index) trong bảng nhảy dựa trên giá trị đó, sau đó nhảy trực tiếp đến địa chỉ tương ứng.
+
+
+```asm 
+    section .data
+    jump_table:
+        dd case_0         ; Địa chỉ xử lý case 0
+        dd case_1         ; Địa chỉ xử lý case 1
+        dd case_2         ; Địa chỉ xử lý case 2
+        dd case_3         ; Địa chỉ xử lý case 3
+        dd default_case   ; Địa chỉ xử lý default (nếu ngoài phạm vi)
+
+    section .text
+        mov eax, [value]      ; Lấy giá trị của biến value
+        cmp eax, 3            ; Kiểm tra nếu value > 3
+        ja default_case       ; Nhảy đến default nếu ngoài phạm vi (0-3)
+        jmp [jump_table + eax * 4]  ; Nhảy đến địa chỉ trong bảng dựa trên value
+
+    case_0:
+        ; Xử lý case 0 (in "Zero")
+        jmp end_switch
+    case_1:
+        ; Xử lý case 1 (in "One")
+        jmp end_switch
+    case_2:
+        ; Xử lý case 2 (in "Two")
+        jmp end_switch
+    case_3:
+        ; Xử lý case 3 (in "Three")
+        jmp end_switch
+    default_case:
+        ; Xử lý default (in "Default")
+    end_switch:`
+```
+
+## Loops 
+
+Ở cấp độ máy (machine level), các vòng lặp trong lập trình bậc cao (như for, while) được triển khai bằng cách sử dụng các lệnh nhảy có điều kiện (Jcc) và nhảy vô điều kiện (JMP). Về bản chất, chúng tương đương với việc sử dụng các cấu trúc if/else để kiểm tra điều kiện và goto để quay lại điểm bắt đầu của vòng lặp. Để hiểu rõ hơn, ta có thể "dịch ngược" một vòng lặp for thành dạng if/else và goto, rồi xem cách nó được biên dịch thành mã máy (assembly).
+
+``` c
+    for (int i=0; i<10; i++) {
+        printf("%d\n", i);
+    }
+    printf("done!\n")
+
+   //  or 
+
+        int i = 0;
+    loop_start:
+        if (i < 10) {
+            printf("%d\n", i);
+            i++;
+            goto loop_start;
+        }
+    printf("done!n");
+
+```
+Khi cả hai phiên bản trên được biên dịch, chúng tạo ra mã máy giống nhau. 
+
+```asm 
+
+    mov    edi, ds:__imp__printf
+    xor    esi, esi
+    lea    ebx, [ebx+0]
+   loc_401010:
+    push   esi
+    push   offset Format                 ; "%d\n"
+    call   edi ; __imp__printf
+    inc    esi
+    add    esp, 8
+    cmp    esi, 0Ah
+    jl     short loc_401010
+    push   offset aDone                  ; "done!\n"
+    call   edi ; __imp__printf
+    add    esp, 4
+
+````
