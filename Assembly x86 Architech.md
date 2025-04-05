@@ -1565,4 +1565,211 @@ Khi cả hai phiên bản trên được biên dịch, chúng tạo ra mã máy 
     call   edi ; __imp__printf
     add    esp, 4
 
-````
+```
+
+
+
+
+
+# WALK THROUGH 
+
+1.Repeat the walk-through by yourself. Draw the stack layout, including
+parameters and local variables.
+
+```asm 
+    01:    ; BOOL __stdcall DllMain(HINSTANCE hinstDLL, DWORD fdwReason,
+           ; LPVOID lpvReserved)
+    02:                _DllMain@12 proc near
+    03: 55               push    ebp ; lưu lại ebp của hàm trc đó đẻ khôi phục 
+    04: 8B EC            mov     ebp, esp ; cập nhật ebp 
+    05: 81 EC 30 01 00+  sub     esp, 130h  ; thiết lập stack frame = cách - esp đi 0x130 
+    06: 57               push    edi ; lưu lại edi 
+    07: 0F 01 4D F8      sidt    fword ptr [ebp-8]  ; thực thi lệnh sidt nó sẽ ghi 6 byte của thanh ghi IDT register vào vùng nhớ [ebp - 8]
+    08: 8B 45 FA         mov     eax, [ebp-6] ; lấy 4 byte đầu của idt vào eax đẻ kiểm tra sau , 4 byte là địa chỉ cơ sở (base address) của bảng IDT, 2 byte là giới hạn (limit).
+    09: 3D 00 F4 03 80   cmp     eax, 8003F400h ; so sánh địa chỉ cơ sở của idt với 0x8003F400
+    10: 76 10            jbe     short loc_10001C88 (line 18)   ; nếu nhỏ hơn hoặc bằng thì nhảy tới line 18
+    11: 3D 00 74 04 80   cmp     eax, 80047400h  ; so sánh địa chỉ cơ sỏ với 0x80047400  
+    12: 73 09            jnb     short loc_10001C88 (line 18)  ; nếu lớn hơn hoặc bằng cũng nhảy tới line 18  , mục địch ở đây là kiểm tra sem 
+    ; địa chỉ cơ sỏ của idt có nằm trong khoảng 0x8003F400 tới  0x80047400 không. 
+    ; Khoảng này đặc trưng cho Windows XP trên CPU lõi 0, vì vậy đây có thể là cách kiểm tra xem hệ thống có đang chạy trong môi trường ảo hóa hay không.
+
+    13: 33 C0            xor     eax, eax ; xóa giá trị tài eax thành 0 để trả về false
+    14: 5F               pop     edi     ; lấy lại edi 
+    15: 8B E5            mov     esp, ebp ; cập nhật lại esp ; 
+    16: 5D               pop     ebp ; cập nhật lại ebp 
+    17: C2 0C 00         retn    0Ch ; dọn dẹp stack frame  12 byte do 3 tham số của DllMain
+    18:                loc_10001C88:   ; ở đây sẽ tiếp tục thực thi gì đó bên dưới 
+    19: 33 C0            xor     eax, eax  ; đặt eax = 0
+    20: B9 49 00 00 00   mov     ecx, 49h  ; đặt 0x49 vào ecx 
+    21: 8D BD D4 FE FF+  lea     edi, [ebp-12Ch] ; lưu edi vào [ebp - 0x12c]
+    22: C7 85 D0 FE FF+  mov     dword ptr [ebp-130h], 0  ; lưu 0 vào [ebp -0x130]
+    23: 50               push    eax ; lưu lại eax = 0 vào stack 
+    24: 6A 02            push    2   ; đẩy 2 vào stack 
+    25: F3 AB            rep stosd   ; ;iên tục ghi  0 vào vùng nhớ edi lưu 
+    26: E8 2D 2F 00 00   call    CreateToolhelp32Snapshot ;  Gọi CreateToolhelp32Snapshot(2, 0), một hàm Win32 API để lấy danh sách tất cả các tiến trình đang chạy trên hệ thống. Tham số 2 (TH32CS_SNAPPROCESS) yêu cầu thông tin tiến trình, và 0 nghĩa là không lọc theo ID tiến trình cụ thể.
+    27: 8B F8            mov     edi, eax  ; lưu giá trị trả vè tuừ CreateToolhelp32Snapshot sem có phải là 0FFFFFFFFh tưc IN VALID hay k. 
+    28: 83 FF FF         cmp     edi, 0FFFFFFFFh ; so sánh sem có phải là invalidinvalid
+    29: 75 09            jnz     short loc_10001CB9 (line 35)  ; nếu k phải thfi nhảy tới line 35 
+    30: 33 C0            xor     eax, eax ; phải thì đặt eax = 0 đẻ return false
+
+    31: 5F               pop     edi ; khôi phục edi 
+    32: 8B E5            mov     esp, ebp ; khôi phục và dọn dẹp stack fame 31 -34 
+    33: 5D               pop     ebp
+    34: C2 0C 00         retn    0Ch
+    35:                loc_10001CB9:  ; ở đầy chươn trình tiếp tục làm gì đó 
+    36: 8D 85 D0 FE FF+  lea     eax, [ebp-130h] ; đặt giá trị trả về từ CreateToolhelp32Snapshot, Đặt eax trỏ đến cấu trúc PROCESSENTRY32 tại [ebp-130h]
+    37: 56               push    esi  ; đẩy các 
+    38: 50               push    eax  ; tham số vào  
+    39: 57               push    edi  ; stack
+    40: C7 85 D0 FE FF+  mov     dword ptr [ebp-130h], 128h ; Đặt trường dwSize của cấu trúc thành 0x128 (kích thước của PROCESSENTRY32).
+    41: E8 FF 2E 00 00   call    Process32First ; ggọi Process32First để lấy thông tin tiến trình đầu tiên từ snapshot.
+    42: 85 C0            test    eax, eax  ; Kiểm tra giá trị trả về của Process32First. Nếu là 0, nhảy đến dòng 70. 
+    43: 74 4F            jz      short loc_10001D24 (line 70)
+    44: 8B 35 C0 50 00+  mov     esi, ds:_stricmp ; đặt đỉa chỉ hàm so sánh vào esi 
+    45: 8D 8D F4 FE FF+  lea     ecx, [ebp-10Ch] ; đặt giá trị tại ... vào ecx 
+    46: 68 50 7C 00 10   push    10007C50h  ; thám số thứ 2 
+    47: 51               push    ecx        ;  thám số thứ 1 
+    48: FF D6            call    esi ; _stricmp ; gọi hàm so sanhs với 2 tham số 
+    49: 83 C4 08         add     esp, 8  ; Dòng 49-51: Dọn stack và kiểm tra kết quả. 
+    50: 85 C0            test    eax, eax
+    51: 74 26            jz      short loc_10001D16 (line 66)  ; Nếu stricmp trả về 0 (chuỗi khớp), nhảy đến dòng 66.
+    52:                loc_10001CF0: ; nếu  không khớp Dòng 52-65: Lặp qua các tiến trình bằng Process32Next
+    53: 8D 95 D0 FE FF+  lea     edx, [ebp-130h] ; 
+    54: 52               push    edx
+    55: 57               push    edi
+    56: E8 CD 2E 00 00   call    Process32Next ; Gọi Process32Next để lấy tiến trình tiếp theo
+    57: 85 C0            test    eax, eax ; Nếu trả về 0 (hết tiến trình), nhảy đến dòng 70.
+    58: 74 23            jz      short loc_10001D24 (line 70) ; 
+    59: 8D 85 F4 FE FF+  lea     eax, [ebp-10Ch]
+    60: 68 50 7C 00 10   push    10007C50h
+    61: 50               push    eax
+    62: FF D6            call    esi ; _stricmp ; So sánh tên tiến trình với "explorer.exe".
+    63: 83 C4 08         add     esp, 8
+    64: 85 C0            test    eax, eax ;  Nếu khớp, thoát vòng lặp (dòng 66); nếu không, quay lại dòng 52.
+    65: 75 DA            jnz     short loc_10001CF0 (line 52) ; loop 
+
+    66:                loc_10001D16:  ; Dòng 66-68: Nếu tìm thấy "explorer.exe", lấy th32ParentProcessID (ID tiến trình cha) và th32ProcessID (ID tiến trình) từ cấu trúc.
+    67: 8B 85 E8 FE FF+  mov     eax, [ebp-118h] ; th32ParentProcessID 
+    68: 8B 8D D8 FE FF+  mov     ecx, [ebp-128h] ; th32ProcessID
+    69: EB 06            jmp     short loc_10001D2A (line 73) ; nhảy tới line 73 
+    70:                loc_10001D24: ; Nếu không tìm thấy, lấy giá trị tham số fdwReason của DllMain (tại [ebp+0Ch]).
+    71: 8B 45 0C         mov     eax, [ebp+0Ch]
+    72: 8B 4D 0C         mov     ecx, [ebp+0Ch]
+    73:                loc_10001D2A:
+    74: 3B C1            cmp     eax, ecx ; So sánh eax và ecx.
+    75: 5E               pop     esi  
+    76: 75 09            jnz     short loc_10001D38 (line 82) ; nêú k bằng nhảy line 82 
+    77: 33 C0            xor     eax, eax ;: Nếu eax == ecx, trả về 0 (FALSE)
+    78: 5F               pop     edi
+    79: 8B E5            mov     esp, ebp
+    80: 5D               pop     ebp
+    81: C2 0C 00         retn    0Ch
+    82:                loc_10001D38:
+    83: 8B 45 0C         mov     eax, [ebp+0Ch] ; lấy giá trị tham số fdwReason của DllMain (tại [ebp+0Ch]).
+    84: 48               dec     eax ; giảm eax đi 1 
+    85: 75 15            jnz     short loc_10001D53 (line 93) ; k bằng 1 nhảy tới line 93
+    ; Nếu fdwReason == 1 (DLL_PROCESS_ATTACH), gọi CreateThread để tạo một thread mới với địa chỉ bắt đầu là 100032D0h.
+    86: 6A 00            push    0
+    87: 6A 00            push    0
+    88: 6A 00            push    0
+    89: 68 D0 32 00 10   push    100032D0h
+    90: 6A 00            push    0
+    91: 6A 00            push    0
+    92: FF 15 20 50 00+  call    ds:CreateThread ; gọi CreateThread để tạo một thread mới với địa chỉ bắt đầu là 100032D0h.
+    93:                loc_10001D53:
+    94: B8 01 00 00 00   mov     eax, 1   ; lưuu 1 vào eax đẻ trả vê true làm gì đó 
+    95: 5F               pop     edi  ; khôi phục edi 
+    96: 8B E5            mov     esp, ebp  ; kp esp 
+    97: 5D               pop     ebp ; kp ebp 
+    98: C2 0C 00         retn    0Ch ; dọn dẹp stack frame và đưa chỉ chỉ lệnh tiếp vào rip 
+    99:                _DllMain@12 endp
+
+```
+
+Hàm DllMain này:
+
+Kiểm tra xem địa chỉ IDT có nằm trong khoảng đặc trưng của Windows XP không. Nếu không, thoát ngay (có thể để phát hiện ảo hóa).
+
+Nếu IDT hợp lệ, duyệt qua tất cả các tiến trình để tìm "explorer.exe".
+
+Dựa trên tham số fdwReason:
+
+Nếu là DLL_PROCESS_ATTACH (1), tạo một thread mới.
+
+Nếu là DLL_PROCESS_DETACH (0), trả về FALSE.
+
+Các trường hợp khác trả về TRUE.
+
+2.In the example walk-through, we did a nearly one-to-one translation of
+the  assembly  code  to  C.  As  an  exercise,  re-decompile  this  whole
+function  so  that  it  looks  more  natural.  What  can  you  say  about  the
+developer's skill level/experience? Explain your reasons. Can you do a
+better job?
+```c
+    typedef struct _IDTR {
+        DWORD base;
+        SHORT limit;
+    } IDTR;
+
+    BOOL __stdcall DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
+        IDTR idtr;
+        __sidt(&idtr);
+        if (idtr.base <= 0x8003F400 || idtr.base >= 0x80047400) {
+            return FALSE;
+        }
+
+        HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (h == INVALID_HANDLE_VALUE) return FALSE;
+
+        PROCESSENTRY32 pe = {0};
+        pe.dwSize = sizeof(pe);
+        if (!Process32First(h, &pe)) return FALSE;
+
+        while (Process32Next(h, &pe)) {
+            if (stricmp(pe.szExeFile, "explorer.exe") == 0) {
+                break;
+            }
+        }
+
+        if (fdwReason == DLL_PROCESS_ATTACH) {
+            CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)0x100032D0, NULL, 0, NULL);
+            return TRUE;
+        }
+        return (fdwReason != DLL_PROCESS_DETACH);
+    }
+```
+
+3.In  some  of  the  assembly  listings,  the  function  name  has  a  @  prefix
+followed by a number. Explain when and why this decoration exists. 
+
+Trong lập trình, đặc biệt khi làm việc với assembly được tạo ra từ mã C hoặc C++ trên các hệ thống Windows (như khi sử dụng Microsoft Visual Studio), bạn có thể thấy tên hàm được "trang trí" (decorated) với ký hiệu @ theo sau là một số, ví dụ như function@8 hoặc myFunc@12. Đây là một phần của quy ước gọi hàm (calling convention) và liên quan đến cách trình biên dịch quản lý các hàm và ngăn xếp (stack).
+
+Khi nào điều này xảy ra?
+
+Ký hiệu này thường xuất hiện trong các chương trình được biên dịch với quy ước gọi hàm __stdcall (standard call), một quy ước phổ biến trong lập trình Windows API. Nó ít phổ biến hơn trong các quy ước khác như __cdecl (quy ước mặc định của C) hoặc __fastcall.
+
+Tại sao ký hiệu @ và số xuất hiện?
+
+Quy ước gọi hàm __stdcall:
+
+Trong __stdcall, các tham số được đẩy lên ngăn xếp từ phải sang trái, và hàm được gọi chịu trách nhiệm dọn sạch ngăn xếp (khác với __cdecl, nơi mã gọi hàm dọn sạch ngăn xếp).
+Để đảm bảo tính tương thích và tránh xung đột khi liên kết (linking), trình biên dịch thêm thông tin về kích thước ngăn xếp vào tên hàm. Số sau ký hiệu @ biểu thị tổng số byte mà các tham số chiếm trên ngăn xếp.
+
+Ví dụ:
+
+Nếu bạn thấy myFunction@8, điều đó có nghĩa là hàm myFunction sử dụng 8 byte tham số trên ngăn xếp (ví dụ: hai tham số kiểu int, mỗi cái 4 byte trên hệ thống 32-bit).
+
+Tên được trang trí này được gọi là "mangled name" hoặc "decorated name", giúp trình liên kết (linker) phân biệt các hàm dựa trên chữ ký của chúng.
+
+Lý do tồn tại:
+
+Ngăn ngừa xung đột tên: Nếu có nhiều hàm trùng tên nhưng khác số lượng hoặc kiểu tham số (function overloading), việc trang trí tên giúp trình liên kết phân biệt chúng.
+Tương thích với hệ thống: Windows sử dụng __stdcall cho nhiều API của nó, vì vậy việc trang trí này đảm bảo mã của bạn khớp với các hàm trong thư viện hệ thống.
+
+Khi nào bạn không thấy ký hiệu này?
+
+Trong quy ước __cdecl, tên hàm thường không được trang trí với @ và số, mà giữ nguyên tên gốc (hoặc chỉ được trang trí theo cách khác nếu có overloading trong C++).
+Trên các nền tảng không phải Windows (như Linux với GCC), quy ước gọi hàm và cách trang trí tên có thể khác, thường dựa trên chuẩn System V ABI và không sử dụng ký hiệu @.
+
+4.Implement the following functions in x86 assembly: strlen, strchr,
+memcpy, memset, strcmp, strset
